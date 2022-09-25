@@ -46,17 +46,22 @@ function parse_commandline()
         "--train_lr"
         help = "learning rate"
         arg_type = Float32
-        default = 0.001f0
+        default = 0.0001f0
 
         "--train_weight_decay"
         help = "weight decay"
         arg_type = Float32
-        jdefault = 0.0001f0
+        default = 0.00001f0
 
         "--seq_len"
         help = "sequence length"
         arg_type = Int
         default = 20
+
+        "--mask_ratio"
+        help = "mask ratio"
+        arg_type = Float32
+        default = 0.15f0
 
     end
 

@@ -7,6 +7,8 @@ using Transformers.Basic
 using ProgressMeter: Progress, next!, finish!
 using Zygote: pullback
 using OneHotArrays
+using Serialization
+using JLD
 
 # load ratings
 ratings = load_ratings()
@@ -38,11 +40,8 @@ VALIDATE_SEQUENCES = USER_RATING_SEQUENCES[end-HOLDOUT_SIZE*2+1:end-HOLDOUT_SIZE
 TEST_SEQUENCES = USER_RATING_SEQUENCES[end-HOLDOUT_SIZE+1:end]
 
 DIM = args["model_dim"]
-SEQ_LEN = args["seq_len"]
-BATCH_SIZE = args["train_batch_size"]
-NUM_EPOCHS = args["train_epochs"]
 
-MASK_RATIO = 0.2
+MASK_RATIO = args["mask_ratio"]
 
 # custom attention layer (for future experiments)
 struct CustomAttention
@@ -166,6 +165,29 @@ model = build_model(args["model_nhead"], args["model_nlayer"], dropout=args["mod
 opt = AdamW(args["train_lr"], (0.9, 0.999), args["train_weight_decay"])
 @info "Optimizer" opt
 
+function get_fix_len_sequence_data(sequences; seq_len=args["seq_len"])
+    result = []
+
+    for seq in sequences
+        # if less than seq_len, pad and return
+        if length(seq) < seq_len / 2
+            continue                        # skip any users with less than seq_len / 2 ratings
+        elseif length(seq) < seq_len
+            seq = pad(seq, seq_len)         # pad with NULL_VALUE
+            push!(result, seq)
+            continue
+        end
+        # if longer than seq_len, sample len(seq)/seq_len times
+        indices = sample(1:length(seq)-seq_len+1, div(length(seq), seq_len), replace=false)
+        for i in indices
+            push!(result, seq[i:i+seq_len-1])
+        end
+    end
+
+    return result
+end
+
+
 train = () -> begin
 
     function pad(x, target_len::Int)
@@ -176,26 +198,8 @@ train = () -> begin
         end
     end
 
-    function get_train_data()
-        result = []
-        for seq in TRAIN_SEQUENCES
-            # if less than SEQ_LEN, pad and return
-            if length(seq) < SEQ_LEN / 2
-                continue                        # skip any users with less than SEQ_LEN / 2 ratings
-            elseif length(seq) < SEQ_LEN
-                seq = pad(seq, SEQ_LEN)         # pad with NULL_VALUE
-                push!(result, seq)
-                continue
-            end
-            # if longer than SEQ_LEN, sample len(seq)/SEQ_LEN times
-            indices = sample(1:length(seq)-SEQ_LEN+1, div(length(seq), SEQ_LEN), replace=false)
-            for i in indices
-                push!(result, seq[i:i+SEQ_LEN-1])
-            end
-        end
-
-        return result
-    end
+    BATCH_SIZE = args["train_batch_size"]
+    NUM_EPOCHS = args["train_epochs"]
 
     params = Flux.params(model)
 
@@ -203,7 +207,7 @@ train = () -> begin
     for epoch in 1:NUM_EPOCHS
 
         # refresh train data each epoch
-        train_data = get_train_data()
+        train_data = get_fix_len_sequence_data(TRAIN_SEQUENCES)
 
         # shuffle train data by batch
         data_loader = Flux.Data.DataLoader(train_data, batchsize=BATCH_SIZE, shuffle=true)
@@ -243,15 +247,13 @@ train = () -> begin
 
     end
 
-    save_model()
-
 end
 
 ##################################################
 # save
 function save_model()
     global model
-    model_filename = "trained/bert_$(args["model_dim"])e_$(args["model_nhead"])h_$(args["model_nlayer"])l_$(args["seq_len"])s.model"
+    model_filename = "trained/bert_$(args["model_dim"])x$(args["seq_len"])_h$(args["model_nhead"])_l$(args["model_nlayer"]).model"
     model_ = model |> cpu
     @info "Saving model to [$(model_filename)]"
     open(model_filename, "w") do io
@@ -264,7 +266,7 @@ end
 # load
 function load_model()
     global model
-    model_filename = "trained/bert_$(args["model_dim"])e_$(args["model_nhead"])h_$(args["model_nlayer"])l_$(args["seq_len"])s.model"
+    model_filename = "trained/bert_$(args["model_dim"])x$(args["seq_len"])_h$(args["model_nhead"])_l$(args["model_nlayer"]).model"
     @info "Loading model from [$(model_filename)]"
     open(model_filename, "r") do io
         model_ = deserialize(io)
@@ -280,5 +282,7 @@ end
 if abspath(PROGRAM_FILE) == @__FILE__
 
     train()
+
+    save_model()
 
 end

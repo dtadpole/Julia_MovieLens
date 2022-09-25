@@ -1,9 +1,11 @@
 CSV
 DataFrames
 Distributions
+JLD
 OneHotArrays
 ProgressMeter
 Recommendation
+Serialization
 Transformers
 ZipFile
 Zygote
