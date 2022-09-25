@@ -241,8 +241,6 @@ train = () -> begin
 
         end
 
-        @info "Epoch $(epoch) loss" loss_avg
-
     end
 
     save_model()
