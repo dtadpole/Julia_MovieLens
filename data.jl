@@ -1,3 +1,5 @@
+include("./args.jl")
+
 using CSV
 using Nettle
 using ZipFile

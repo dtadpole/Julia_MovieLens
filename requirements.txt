@@ -1,6 +1,7 @@
 CSV
 DataFrames
 Distributions
+OneHotArrays
 ProgressMeter
 Recommendation
 Transformers

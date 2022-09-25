@@ -37,10 +37,10 @@ TRAIN_SEQUENCES = USER_RATING_SEQUENCES[1:end-HOLDOUT_SIZE*2]
 VALIDATE_SEQUENCES = USER_RATING_SEQUENCES[end-HOLDOUT_SIZE*2+1:end-HOLDOUT_SIZE]
 TEST_SEQUENCES = USER_RATING_SEQUENCES[end-HOLDOUT_SIZE+1:end]
 
-DIM = 32
-SEQ_LEN = 20
-BATCH_SIZE = 64
-NUM_EPOCHS = 10
+DIM = args["model_dim"]
+SEQ_LEN = args["seq_len"]
+BATCH_SIZE = args["train_batch_size"]
+NUM_EPOCHS = args["train_epochs"]
 
 MASK_RATIO = 0.2
 
@@ -160,10 +160,10 @@ lossF = (x, masks) -> begin
 end
 
 # train model
-model = build_model(4, 2)
+model = build_model(args["model_nhead"], args["model_nlayer"], dropout=args["model_dropout"])
 @info "Model" model
 
-opt = AdamW(0.001, (0.9, 0.999), 0.0001)
+opt = AdamW(args["train_lr"], (0.9, 0.999), args["train_weight_decay"])
 @info "Optimizer" opt
 
 train = () -> begin
@@ -240,8 +240,42 @@ train = () -> begin
             ])
 
         end
+
+        @info "Epoch $(epoch) loss" loss_avg
+
     end
 
+    save_model()
+
+end
+
+##################################################
+# save
+function save_model()
+    global model
+    model_filename = "trained/bert_$(args["model_dim"])e_$(args["model_nhead"])h_$(args["model_nlayer"])l_$(args["seq_len"])s.model"
+    model_ = model |> cpu
+    @info "Saving model to [$(model_filename)]"
+    open(model_filename, "w") do io
+        serialize(io, model_)
+    end
+    return nothing
+end
+
+##################################################
+# load
+function load_model()
+    global model
+    model_filename = "trained/bert_$(args["model_dim"])e_$(args["model_nhead"])h_$(args["model_nlayer"])l_$(args["seq_len"])s.model"
+    @info "Loading model from [$(model_filename)]"
+    open(model_filename, "r") do io
+        model_ = deserialize(io)
+        Flux.loadmodel!(model, model_)
+    end
+    if args["model_cuda"] >= 0
+        model = model |> gpu
+    end
+    return model
 end
 
 
