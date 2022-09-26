@@ -176,9 +176,15 @@ train = () -> begin
 
     # train model
     model = build_model(args["model_nhead"], args["model_nlayer"], dropout=args["model_dropout"])
+    if args["model_cuda"] >= 0
+        model = model |> gpu
+    end
     @info "Model" model
 
     opt = AdamW(args["train_lr"], (0.9, 0.999), args["train_weight_decay"])
+    if args["model_cuda"] >= 0
+        opt = opt |> gpu
+    end
     @info "Optimizer" opt
 
     function pad(x, target_len::Int)
@@ -211,9 +217,15 @@ train = () -> begin
 
             # convert vector of sequences to matrix
             batch = reduce(hcat, batch)                         # (SEQ_LEN, BATCH_SIZE)
+            if args["model_cuda"] >= 0
+                batch = batch |> gpu
+            end
 
             masks = rand(Float32, size(batch)) .< MASK_RATIO    # (SEQ_LEN, BATCH_SIZE)
             masks[size(masks, 1), :] .= 1                       # always mask last item in sequence
+            if args["model_cuda"] >= 0
+                masks = masks |> gpu
+            end
 
             # @info "Masks" masks
             # @info "Batch" batch

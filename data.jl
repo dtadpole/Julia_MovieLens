@@ -1,7 +1,6 @@
 include("./args.jl")
 
 using CSV
-using Nettle
 using ZipFile
 using DataFrames
 

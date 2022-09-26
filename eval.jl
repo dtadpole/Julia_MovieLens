@@ -24,9 +24,15 @@ eval_model = (model, input_sequences; label="Evaluation") -> begin
         # convert vector of sequences to matrix
         batch = reduce(hcat, batch)                                 # (SEQ_LEN, BATCH_SIZE)
         batch_size = size(batch, 2)
+        if args["model_cuda"] >= 0
+            batch = batch |> gpu
+        end
 
         masks = zeros(Int, size(batch))                             # (SEQ_LEN, BATCH_SIZE)
         masks[size(masks, 1), :] .= 1                               # mask the last item in sequence
+        if args["model_cuda"] >= 0
+            masks = masks |> gpu
+        end
 
         masked_batch = batch .* (1 .- masks) .+ (masks .* MASK_VALUE)
 
