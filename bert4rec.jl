@@ -106,16 +106,16 @@ build_model = (n_head::Int, n_layer::Int; dropout=0.1f0) -> begin
         Chain(
             IdentitySkip(
                 Chain(
-                    CustomAttention(n_head, DIM, dropout=dropout),
                     LayerNorm(DIM),
+                    CustomAttention(n_head, DIM, dropout=dropout),
                 )
             ),
             IdentitySkip(
                 Chain(
-                    Dense(DIM => DIM * 4, gelu),
-                    Dense(DIM * 4 => DIM, gelu),
-                    Dropout(dropout),
                     LayerNorm(DIM),
+                    Dense(DIM => DIM * 4, gelu),
+                    Dense(DIM * 4 => DIM),
+                    Dropout(dropout),
                 )
             )
         ) for i in 1:n_layer
@@ -127,9 +127,10 @@ build_model = (n_head::Int, n_layer::Int; dropout=0.1f0) -> begin
         IdentitySkip(
             PositionEmbedding(DIM, trainable=false),                    # (DIM, SEQ_LEN, BATCH_SIZE) => (DIM, SEQ_LEN, BATCH_SIZE)
         ),
-        LayerNorm(DIM),
+        # Dropout(dropout),
         Chain(blocks...),                                               # n_layer Blocks of CustomAttention
-        Dense(DIM => MOVIE_SIZE, gelu),                                 # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
+        LayerNorm(DIM),
+        Dense(DIM => MOVIE_SIZE, bias=false),                           # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
         softmax,
     )
 
@@ -157,6 +158,8 @@ lossF = (model, x, masks) -> begin
     loss_embed = reshape(loss_embed, :)                                 # (BATCH_SIZE,)
 
     masks_sum = reshape(sum(masks, dims=1), :)                          # (SEQ_LEN, BATCH_SIZE) => (BATCH_SIZE)
+
+    # println("masks_sum: $(masks_sum)")
 
     loss_batch = mean(loss_embed ./ masks_sum)
 

@@ -16,7 +16,7 @@ function parse_commandline()
         "--model_dim"
         help = "model embedding dimension"
         arg_type = Int
-        default = 32
+        default = 64
 
         "--model_nhead"
         help = "model number of heads"
