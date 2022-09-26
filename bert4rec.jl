@@ -136,14 +136,11 @@ end
 
 
 # loss function.  x must have already been padded with preceeding NULL_VALUE
-lossF = (model, x, masks) -> begin
+lossF = (model, x, masks, y_truth) -> begin
 
     masked_x = x .* (1 .- masks) .+ (masks .* MASK_VALUE)
 
     y = model(masked_x)                                                 # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
-
-    y_truth = onehotbatch(x .* masks, 0:MOVIE_SIZE)                     # (VOCAB_SIZE+1, SEQ_LEN, BATCH_SIZE)
-    y_truth = y_truth[2:end, :, :]                                      # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
 
     loss_embed_sum = reshape(-sum(y_truth .* log.(y), dims=(1, 2)), :)  # (BATCH_SIZE,)
 
@@ -216,22 +213,28 @@ train = () -> begin
         for batch in data_loader
 
             # convert vector of sequences to matrix
-            batch = reduce(hcat, batch)                         # (SEQ_LEN, BATCH_SIZE)
+            batch = reduce(hcat, batch)                                         # (SEQ_LEN, BATCH_SIZE)
             if args["model_cuda"] >= 0
                 batch = batch |> gpu
             end
 
-            masks = rand(Float32, size(batch)) .< MASK_RATIO    # (SEQ_LEN, BATCH_SIZE)
-            masks[size(masks, 1), :] .= 1                       # always mask last item in sequence
+            masks = rand(Float32, size(batch)) .< MASK_RATIO                    # (SEQ_LEN, BATCH_SIZE)
+            masks[size(masks, 1), :] .= 1                                       # always mask last item in sequence
             if args["model_cuda"] >= 0
                 masks = masks |> gpu
+            end
+
+            y_truth = onehotbatch(x .* masks, 0:MOVIE_SIZE)                     # (VOCAB_SIZE+1, SEQ_LEN, BATCH_SIZE)
+            y_truth = y_truth[2:end, :, :]                                      # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
+            if args["model_cuda"] >= 0
+                y_truth = y_truth |> gpu
             end
 
             # @info "Masks" masks
             # @info "Batch" batch
 
             loss, back = pullback(params) do
-                lossF(model, batch, masks)
+                lossF(model, batch, masks, y_truth)
             end
 
             grads = back(1.0f0)
