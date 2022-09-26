@@ -46,7 +46,7 @@ function parse_commandline()
         "--train_lr"
         help = "learning rate"
         arg_type = Float64
-        default = 0.001
+        default = 0.002
 
         "--train_weight_decay"
         help = "weight decay"

@@ -81,6 +81,9 @@ Flux.@functor CustomAttention
     # println("[$(typeof(q))] $(size(q)) * [$(typeof(k_))] $(size(k_))")
     att = Transformers.batchedmul(q, k_)                                # (SEQ_LEN, SEQ_LEN, HEAD, BATCH_SIZE) = (SEQ_LEN, DIM/HEAD, HEAD, BATCH_SIZE) * (DIM/HEAD, SEQ_LEN, HEAD, BATCH_SIZE)
     att = softmax(att ./ sqrt(Float32(m.dim / m.head)), dims=2)         # (SEQ_LEN, SEQ_LEN, HEAD, BATCH_SIZE)
+    # att = softmax(att ./ sqrt(Float32(m.dim / m.head)), dims=1)         # (SEQ_LEN, SEQ_LEN, HEAD, BATCH_SIZE)
+    # att = softmax(att ./ sqrt(Float32(seq_len)), dims=2)                # (SEQ_LEN, SEQ_LEN, HEAD, BATCH_SIZE)
+    # att = softmax(att ./ sqrt(Float32(seq_len)), dims=1)                # (SEQ_LEN, SEQ_LEN, HEAD, BATCH_SIZE)
 
     # TODO: add denoising mask here - potential future work
 
@@ -122,7 +125,7 @@ build_model = (n_head::Int, n_layer::Int; dropout=0.1f0) -> begin
     model = Chain(
         Embed(DIM, MOVIE_SIZE + 3),                                     # (SEQ_LEN, BATCH_SIZE) => (DIM, SEQ_LEN, BATCH_SIZE)
         IdentitySkip(
-            PositionEmbedding(DIM, trainable=true),                     # (DIM, SEQ_LEN, BATCH_SIZE) => (DIM, SEQ_LEN, BATCH_SIZE)
+            PositionEmbedding(DIM, trainable=false),                    # (DIM, SEQ_LEN, BATCH_SIZE) => (DIM, SEQ_LEN, BATCH_SIZE)
         ),
         LayerNorm(DIM),
         Chain(blocks...),                                               # n_layer Blocks of CustomAttention
@@ -140,22 +143,22 @@ lossF = (model, x, masks) -> begin
 
     masked_x = x .* (1 .- masks) .+ (masks .* MASK_VALUE)
 
-    y = model(masked_x)                                                 # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
-    println("y: $(size(y)) $(typeof(y))")
+    y_pred = model(masked_x)                                            # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
+    # println("y_pred: $(size(y_pred)) $(typeof(y_pred))")
 
     y_truth = reshape(x .* masks, (1, size(x)...)) .== 1:MOVIE_SIZE     # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
     y_truth = Float32.(y_truth)
-    println("y_truth: $(size(y_truth)) $(typeof(y_truth))")
+    # println("y_truth: $(size(y_truth)) $(typeof(y_truth))")
 
-    loss_embed = -y_truth .* log.(y)
-    println("loss_embed: $(size(loss_embed)) $(typeof(loss_embed))")
+    loss_embed = -y_truth .* log.(y_pred)
+    # println("loss_embed: $(size(loss_embed)) $(typeof(loss_embed))")
 
     loss_embed = sum(loss_embed, dims=(1, 2))
     loss_embed = reshape(loss_embed, :)                                 # (BATCH_SIZE,)
 
-    masks_sum = reshape(1 ./ sum(masks, dims=1), :)                     # (SEQ_LEN, BATCH_SIZE) => (BATCH_SIZE)
+    masks_sum = reshape(sum(masks, dims=1), :)                          # (SEQ_LEN, BATCH_SIZE) => (BATCH_SIZE)
 
-    loss_batch = mean(loss_embed .* masks_sum)
+    loss_batch = mean(loss_embed ./ masks_sum)
 
     return loss_batch
 
