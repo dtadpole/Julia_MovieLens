@@ -251,6 +251,12 @@ train = () -> begin
 
         end
 
+        # GC and reclaim GPU memory after each epoch
+        GC.gc(false)
+        if args["model_cuda"] >= 0
+            CUDA.reclaim()
+        end
+
     end
 
     return model
