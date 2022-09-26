@@ -219,7 +219,7 @@ train = () -> begin
             batch = reduce(hcat, batch)                                                 # (SEQ_LEN, BATCH_SIZE)
 
             masks = rand(Float32, size(batch)) .< MASK_RATIO                            # (SEQ_LEN, BATCH_SIZE)
-            masks[size(masks, 1), :] .= 1                                               # always mask last item in sequence
+            masks[end, :] .= 1                                                          # mask last item in sequence
 
             # y_truth = onehotbatch(batch .* masks, 0:MOVIE_SIZE)                       # (VOCAB_SIZE+1, SEQ_LEN, BATCH_SIZE)
             # y_truth = y_truth[2:end, :, :]                                            # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
@@ -235,7 +235,7 @@ train = () -> begin
             # @info "Batch" batch
 
             loss, back = pullback(params) do
-                lossF(model, batch, masks, y_truth)
+                lossF(model, batch, masks)
             end
 
             grads = back(1.0f0)

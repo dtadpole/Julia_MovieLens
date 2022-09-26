@@ -29,7 +29,7 @@ eval_model = (model, input_sequences; label="Evaluation") -> begin
         end
 
         masks = zeros(Int, size(batch))                             # (SEQ_LEN, BATCH_SIZE)
-        masks[size(masks, 1), :] .= 1                               # mask the last item in sequence
+        masks[end, :] .= 1                                          # mask the last item in sequence
         if args["model_cuda"] >= 0
             masks = masks |> gpu
         end
