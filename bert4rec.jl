@@ -146,8 +146,10 @@ lossF = (model, x, masks) -> begin
     y_truth = Float32.(y_truth)
 
     loss_embed = y_truth .* log.(y)
+    println("loss_embed: $(size(loss_embed))")
+
     loss_embed = -sum(loss_embed, dims=(1, 2))
-    loss_embed = reshape(loss_embed, :)          # (BATCH_SIZE,)
+    loss_embed = reshape(loss_embed, :)                                 # (BATCH_SIZE,)
 
     masks_sum = reshape(1 ./ sum(masks, dims=1), :)                     # (SEQ_LEN, BATCH_SIZE) => (BATCH_SIZE)
 
