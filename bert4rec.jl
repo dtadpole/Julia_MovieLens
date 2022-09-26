@@ -141,14 +141,16 @@ lossF = (model, x, masks) -> begin
     masked_x = x .* (1 .- masks) .+ (masks .* MASK_VALUE)
 
     y = model(masked_x)                                                 # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
+    println("y: $(size(y)) $(typeof(y))")
 
     y_truth = reshape(x .* masks, (1, size(x)...)) .== 1:MOVIE_SIZE     # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
     y_truth = Float32.(y_truth)
+    println("y_truth: $(size(y_truth)) $(typeof(y_truth))")
 
-    loss_embed = y_truth .* log.(y)
+    loss_embed = -y_truth .* log.(y)
     println("loss_embed: $(size(loss_embed)) $(typeof(loss_embed))")
 
-    loss_embed = -sum(loss_embed, dims=(1, 2))
+    loss_embed = sum(loss_embed, dims=(1, 2))
     loss_embed = reshape(loss_embed, :)                                 # (BATCH_SIZE,)
 
     masks_sum = reshape(1 ./ sum(masks, dims=1), :)                     # (SEQ_LEN, BATCH_SIZE) => (BATCH_SIZE)
