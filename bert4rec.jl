@@ -136,11 +136,14 @@ end
 
 
 # loss function.  x must have already been padded with preceeding NULL_VALUE
-lossF = (model, x, masks, y_truth) -> begin
+lossF = (model, x, masks) -> begin
 
     masked_x = x .* (1 .- masks) .+ (masks .* MASK_VALUE)
 
     y = model(masked_x)                                                 # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
+
+    y_truth = reshape(x .* masks, (1, size(x)...)) .== 1:MOVIE_SIZE     # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
+    y_truth = Float32.(y_truth)
 
     loss_embed_sum = reshape(-sum(y_truth .* log.(y), dims=(1, 2)), :)  # (BATCH_SIZE,)
 
@@ -220,13 +223,12 @@ train = () -> begin
 
             # y_truth = onehotbatch(batch .* masks, 0:MOVIE_SIZE)                       # (VOCAB_SIZE+1, SEQ_LEN, BATCH_SIZE)
             # y_truth = y_truth[2:end, :, :]                                            # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
-            y_truth = reshape(batch .* masks, (1, size(batch)...)) .== 1:MOVIE_SIZE     # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
 
             # move data to GPU if available
             if args["model_cuda"] >= 0
                 batch = batch |> gpu
                 masks = masks |> gpu
-                y_truth = y_truth |> gpu
+                # y_truth = y_truth |> gpu
             end
 
             # @info "Masks" masks
