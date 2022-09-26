@@ -21,7 +21,7 @@ function parse_commandline()
         "--model_nhead"
         help = "model number of heads"
         arg_type = Int
-        default = 4
+        default = 2
 
         "--model_nlayer"
         help = "model number of layers"
@@ -31,9 +31,9 @@ function parse_commandline()
         "--model_dropout"
         help = "model dropout"
         arg_type = Float32
-        default = 0.1f0
+        default = 0.2f0
 
-        "--train_batch_size"
+        "--batch_size"
         help = "batch size"
         arg_type = Int
         default = 64
@@ -45,13 +45,13 @@ function parse_commandline()
 
         "--train_lr"
         help = "learning rate"
-        arg_type = Float32
-        default = 0.0001f0
+        arg_type = Float64
+        default = 0.001
 
         "--train_weight_decay"
         help = "weight decay"
         arg_type = Float32
-        default = 0.00001f0
+        default = 0.0001f0
 
         "--seq_len"
         help = "sequence length"
@@ -61,7 +61,7 @@ function parse_commandline()
         "--mask_ratio"
         help = "mask ratio"
         arg_type = Float32
-        default = 0.15f0
+        default = 0.2f0
 
     end
 

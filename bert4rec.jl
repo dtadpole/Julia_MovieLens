@@ -45,19 +45,19 @@ MASK_RATIO = args["mask_ratio"]
 
 # custom attention layer (for future experiments)
 struct CustomAttention
-    # attributes
     head::Int
     dim::Int
     input::Dense
     output::Dense
     dropout::Float32
-    # constructor
-    function CustomAttention(head, dim; dropout=0.1f0)
-        if dim % head != 0
-            error("Dimension must be divisible by head")
-        end
-        new(head, dim, Dense(dim => dim * 3), Dense(dim => dim), dropout)
+end
+
+# constructor
+function CustomAttention(head, dim; dropout=0.1f0)
+    if dim % head != 0
+        error("Dimension must be divisible by head")
     end
+    CustomAttention(head, dim, Dense(dim => dim * 3), Dense(dim => dim), dropout)
 end
 
 Flux.@functor CustomAttention
@@ -126,7 +126,7 @@ build_model = (n_head::Int, n_layer::Int; dropout=0.1f0) -> begin
         ),
         LayerNorm(DIM),
         Chain(blocks...),                                               # n_layer Blocks of CustomAttention
-        Dense(DIM => MOVIE_SIZE + 3, gelu),                             # (DIM, SEQ_LEN, BATCH_SIZE) => (MOVIE_SIZE + 3, SEQ_LEN, BATCH_SIZE)
+        Dense(DIM => MOVIE_SIZE, gelu),                                 # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
         softmax,
     )
 
@@ -136,59 +136,50 @@ end
 
 
 # loss function.  x must have already been padded with preceeding NULL_VALUE
-lossF = (x, masks) -> begin
+lossF = (model, x, masks) -> begin
 
     masked_x = x .* (1 .- masks) .+ (masks .* MASK_VALUE)
 
-    y = model(masked_x)
+    y = model(masked_x)                                                 # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
 
-    y_truth = onehotbatch(x .* masks, 1:MOVIE_SIZE+3, MOVIE_SIZE + 3)   # TODO
+    y_truth = onehotbatch(x .* masks, 0:MOVIE_SIZE)                     # (VOCAB_SIZE+1, SEQ_LEN, BATCH_SIZE)
+    y_truth = y_truth[2:end, :, :]                                      # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
 
-    loss_embed = -sum(y_truth .* log.(y), dims=1)
+    loss_embed_sum = reshape(-sum(y_truth .* log.(y), dims=(1, 2)), :)  # (BATCH_SIZE,)
 
-    loss_embed_sum = reshape(sum(loss_embed, dims=(1, 2)), :)
+    masks_sum = reshape(1 ./ sum(masks, dims=1), :)                     # (SEQ_LEN, BATCH_SIZE) => (BATCH_SIZE)
 
-    masks_sum = reshape(1 ./ sum(masks, dims=1), :)
-
-    loss_seq = loss_embed_sum .* masks_sum
-
-    loss_batch = mean(loss_seq)
+    loss_batch = mean(loss_embed_sum .* masks_sum)
 
     return loss_batch
 
 end
 
-# train model
-model = build_model(args["model_nhead"], args["model_nlayer"], dropout=args["model_dropout"])
-@info "Model" model
-
-opt = AdamW(args["train_lr"], (0.9, 0.999), args["train_weight_decay"])
-@info "Optimizer" opt
-
+# get fixed sequence lenth data
 function get_fix_len_sequence_data(sequences; seq_len=args["seq_len"])
     result = []
-
     for seq in sequences
         # if less than seq_len, pad and return
-        if length(seq) < seq_len / 2
-            continue                        # skip any users with less than seq_len / 2 ratings
-        elseif length(seq) < seq_len
-            seq = pad(seq, seq_len)         # pad with NULL_VALUE
-            push!(result, seq)
-            continue
+        if length(seq) < seq_len
+            continue                        # skip any users with less than seq_len ratings
         end
         # if longer than seq_len, sample len(seq)/seq_len times
-        indices = sample(1:length(seq)-seq_len+1, div(length(seq), seq_len), replace=false)
-        for i in indices
+        for i in 1:seq_len:length(seq)-seq_len+1
             push!(result, seq[i:i+seq_len-1])
         end
     end
-
     return result
 end
 
 
 train = () -> begin
+
+    # train model
+    model = build_model(args["model_nhead"], args["model_nlayer"], dropout=args["model_dropout"])
+    @info "Model" model
+
+    opt = AdamW(args["train_lr"], (0.9, 0.999), args["train_weight_decay"])
+    @info "Optimizer" opt
 
     function pad(x, target_len::Int)
         if length(x) < target_len
@@ -198,7 +189,7 @@ train = () -> begin
         end
     end
 
-    BATCH_SIZE = args["train_batch_size"]
+    BATCH_SIZE = args["batch_size"]
     NUM_EPOCHS = args["train_epochs"]
 
     params = Flux.params(model)
@@ -228,7 +219,7 @@ train = () -> begin
             # @info "Batch" batch
 
             loss, back = pullback(params) do
-                lossF(batch, masks)
+                lossF(model, batch, masks)
             end
 
             grads = back(1.0f0)
@@ -247,12 +238,13 @@ train = () -> begin
 
     end
 
+    return model
+
 end
 
 ##################################################
 # save
-function save_model()
-    global model
+function save_model(model)
     model_filename = "trained/bert_$(args["model_dim"])x$(args["seq_len"])_h$(args["model_nhead"])_l$(args["model_nlayer"]).model"
     model_ = model |> cpu
     @info "Saving model to [$(model_filename)]"
@@ -265,24 +257,23 @@ end
 ##################################################
 # load
 function load_model()
-    global model
     model_filename = "trained/bert_$(args["model_dim"])x$(args["seq_len"])_h$(args["model_nhead"])_l$(args["model_nlayer"]).model"
     @info "Loading model from [$(model_filename)]"
     open(model_filename, "r") do io
         model_ = deserialize(io)
-        Flux.loadmodel!(model, model_)
+        # Flux.loadmodel!(model, model_)
+        if args["model_cuda"] >= 0
+            model_ = model_ |> gpu
+        end
+        return model_
     end
-    if args["model_cuda"] >= 0
-        model = model |> gpu
-    end
-    return model
 end
 
 
 if abspath(PROGRAM_FILE) == @__FILE__
 
-    train()
+    model = train()
 
-    save_model()
+    save_model(model)
 
 end
