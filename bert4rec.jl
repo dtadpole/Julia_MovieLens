@@ -214,19 +214,17 @@ train = () -> begin
 
             # convert vector of sequences to matrix
             batch = reduce(hcat, batch)                                         # (SEQ_LEN, BATCH_SIZE)
-            if args["model_cuda"] >= 0
-                batch = batch |> gpu
-            end
 
             masks = rand(Float32, size(batch)) .< MASK_RATIO                    # (SEQ_LEN, BATCH_SIZE)
             masks[size(masks, 1), :] .= 1                                       # always mask last item in sequence
-            if args["model_cuda"] >= 0
-                masks = masks |> gpu
-            end
 
             y_truth = onehotbatch(batch .* masks, 0:MOVIE_SIZE)                 # (VOCAB_SIZE+1, SEQ_LEN, BATCH_SIZE)
             y_truth = y_truth[2:end, :, :]                                      # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
+
+            # move data to GPU if available
             if args["model_cuda"] >= 0
+                batch = batch |> gpu
+                masks = masks |> gpu
                 y_truth = y_truth |> gpu
             end
 
