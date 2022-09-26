@@ -213,14 +213,14 @@ train = () -> begin
         for batch in data_loader
 
             # convert vector of sequences to matrix
-            batch = reduce(hcat, batch)                                         # (SEQ_LEN, BATCH_SIZE)
+            batch = reduce(hcat, batch)                                                 # (SEQ_LEN, BATCH_SIZE)
 
-            masks = rand(Float32, size(batch)) .< MASK_RATIO                    # (SEQ_LEN, BATCH_SIZE)
-            masks[size(masks, 1), :] .= 1                                       # always mask last item in sequence
+            masks = rand(Float32, size(batch)) .< MASK_RATIO                            # (SEQ_LEN, BATCH_SIZE)
+            masks[size(masks, 1), :] .= 1                                               # always mask last item in sequence
 
-            # y_truth = onehotbatch(batch .* masks, 0:MOVIE_SIZE)                 # (VOCAB_SIZE+1, SEQ_LEN, BATCH_SIZE)
-            # y_truth = y_truth[2:end, :, :]                                      # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
-            y_truth = reshape(x .* masks, (1, size(x)...)) .== 1:MOVIE_SIZE     # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
+            # y_truth = onehotbatch(batch .* masks, 0:MOVIE_SIZE)                       # (VOCAB_SIZE+1, SEQ_LEN, BATCH_SIZE)
+            # y_truth = y_truth[2:end, :, :]                                            # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
+            y_truth = reshape(batch .* masks, (1, size(batch)...)) .== 1:MOVIE_SIZE     # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
 
             # move data to GPU if available
             if args["model_cuda"] >= 0
