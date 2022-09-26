@@ -224,7 +224,7 @@ train = () -> begin
                 masks = masks |> gpu
             end
 
-            y_truth = onehotbatch(x .* masks, 0:MOVIE_SIZE)                     # (VOCAB_SIZE+1, SEQ_LEN, BATCH_SIZE)
+            y_truth = onehotbatch(batch .* masks, 0:MOVIE_SIZE)                 # (VOCAB_SIZE+1, SEQ_LEN, BATCH_SIZE)
             y_truth = y_truth[2:end, :, :]                                      # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
             if args["model_cuda"] >= 0
                 y_truth = y_truth |> gpu
