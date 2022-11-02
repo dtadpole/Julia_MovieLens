@@ -16,12 +16,12 @@ function parse_commandline()
         "--model_dim"
         help = "model embedding dimension"
         arg_type = Int
-        default = 128
+        default = 64
 
         "--model_nhead"
         help = "model number of heads"
         arg_type = Int
-        default = 4
+        default = 2
 
         "--model_nlayer"
         help = "model number of layers"
@@ -51,7 +51,7 @@ function parse_commandline()
         "--train_weight_decay"
         help = "weight decay"
         arg_type = Float32
-        default = 0.00002f0
+        default = 0.00005f0
 
         "--seq_len"
         help = "sequence length"
@@ -61,7 +61,7 @@ function parse_commandline()
         "--mask_ratio"
         help = "mask ratio"
         arg_type = Float32
-        default = 0.15f0
+        default = 0.2f0
 
     end
 

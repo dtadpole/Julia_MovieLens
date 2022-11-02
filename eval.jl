@@ -102,7 +102,7 @@ end
 if abspath(PROGRAM_FILE) == @__FILE__
 
     model = load_model()
-    @info "Loaed model" model
+    # @info "Loaed model" model
 
     @info "Evaluating model with validation data"
     eval_model(model, VALIDATE_SEQUENCES, label="Validation Data")

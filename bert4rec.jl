@@ -113,7 +113,7 @@ function CustomEmbedding(dim::Int, vocab::Int, inner; extra::Int=1)
     if dim <= 0 || vocab <= 0
         error("Dimension and Vocabulary must be positive")
     end
-    CustomEmbedding(Flux.glorot_uniform(dim, vocab), inner, extra)
+    CustomEmbedding(Flux.glorot_normal(dim, vocab), inner, extra)
 end
 
 Flux.@functor CustomEmbedding
@@ -169,19 +169,19 @@ build_model = (n_head::Int, n_layer::Int; dropout=0.1f0) -> begin
 
     # construct model
     model = Chain(
-        # Embed(DIM, MOVIE_SIZE + 1),                                   # (VOCAB_SIZE+1, SEQ_LEN, BATCH_SIZE) => (DIM, SEQ_LEN, BATCH_SIZE)
-        CustomEmbedding(
-            DIM,
-            MOVIE_SIZE,
-            Chain(
-                IdentitySkip(
-                    PositionEmbedding(DIM, trainable=true),             # Position Embedding
-                ),
-                Chain(blocks...),                                       # n_layer Blocks of CustomAttention
-                LayerNorm(DIM)
-            )
+        # CustomEmbedding(
+        #     DIM,
+        #     MOVIE_SIZE,
+        #     Chain(
+        Embed(DIM, MOVIE_SIZE + 1),                             # (VOCAB_SIZE+1, SEQ_LEN, BATCH_SIZE) => (DIM, SEQ_LEN, BATCH_SIZE)
+        IdentitySkip(
+            PositionEmbedding(DIM, trainable=true),             # Position Embedding
         ),
-        # Dense(DIM => MOVIE_SIZE, bias=false),                         # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
+        Chain(blocks...),                                       # n_layer Blocks of CustomAttention
+        LayerNorm(DIM),
+        Dense(DIM => MOVIE_SIZE, bias=true),                    # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
+        #     )
+        # ),
         softmax,
     )
 
