@@ -16,12 +16,12 @@ function parse_commandline()
         "--model_dim"
         help = "model embedding dimension"
         arg_type = Int
-        default = 64
+        default = 128
 
         "--model_nhead"
         help = "model number of heads"
         arg_type = Int
-        default = 2
+        default = 4
 
         "--model_nlayer"
         help = "model number of layers"
