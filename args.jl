@@ -31,7 +31,7 @@ function parse_commandline()
         "--model_dropout"
         help = "model dropout"
         arg_type = Float32
-        default = 0.1f0
+        default = 0.2f0
 
         "--batch_size"
         help = "batch size"
@@ -46,7 +46,7 @@ function parse_commandline()
         "--train_lr"
         help = "learning rate"
         arg_type = Float64
-        default = 0.002
+        default = 0.005
 
         "--train_weight_decay"
         help = "weight decay"
@@ -61,7 +61,7 @@ function parse_commandline()
         "--mask_ratio"
         help = "mask ratio"
         arg_type = Float32
-        default = 0.2f0
+        default = 0.15f0
 
     end
 
