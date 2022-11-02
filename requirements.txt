@@ -3,6 +3,7 @@ DataFrames
 Distributions
 JLD
 OneHotArrays
+NNlib
 ProgressMeter
 Recommendation
 Serialization

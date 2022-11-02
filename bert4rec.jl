@@ -6,6 +6,7 @@ using Transformers
 using Transformers.Basic
 using ProgressMeter: Progress, next!, finish!
 using Zygote: pullback
+using NNlib
 using OneHotArrays
 using Serialization
 using JLD
@@ -23,8 +24,8 @@ MOVIE_SIZE = max(ratings.mid...)
 
 
 # special token for MASK and NULL
-NULL_VALUE = MOVIE_SIZE + 1
-MASK_VALUE = MOVIE_SIZE + 2
+MASK_VALUE = MOVIE_SIZE + 1
+# NULL_VALUE = MOVIE_SIZE + 2
 
 # prep user rating sequences
 USER_RATING_SEQUENCES = fill(Vector{Int}(), USER_SIZE)
@@ -43,6 +44,7 @@ DIM = args["model_dim"]
 
 MASK_RATIO = args["mask_ratio"]
 
+################################################################################
 # custom attention layer (for future experiments)
 struct CustomAttention
     head::Int
@@ -57,7 +59,7 @@ function CustomAttention(head, dim; dropout=0.1f0)
     if dim % head != 0
         error("Dimension must be divisible by head")
     end
-    CustomAttention(head, dim, Dense(dim => dim * 3), Dense(dim => dim), dropout)
+    CustomAttention(head, dim, Dense(dim => dim * 3, bias=false), Dense(dim => dim, bias=false), dropout)
 end
 
 Flux.@functor CustomAttention
@@ -78,7 +80,7 @@ Flux.@functor CustomAttention
     q = permutedims(q, (3, 1, 2, 4))                                    # (SEQ_LEN, DIM/HEAD, HEAD, BATCH_SIZE)
     v = permutedims(v, (3, 1, 2, 4))                                    # (SEQ_LEN, DIM/HEAD, HEAD, BATCH_SIZE)
 
-    # println("[$(typeof(q))] $(size(q)) * [$(typeof(k_))] $(size(k_))")
+    # println("[$(typeof(q)) : $(size(q))] @ [$(typeof(k_)) : $(size(k_))]")
     att = Transformers.batchedmul(q, k_)                                # (SEQ_LEN, SEQ_LEN, HEAD, BATCH_SIZE) = (SEQ_LEN, DIM/HEAD, HEAD, BATCH_SIZE) * (DIM/HEAD, SEQ_LEN, HEAD, BATCH_SIZE)
     att = softmax(att ./ sqrt(Float32(m.dim / m.head)), dims=2)         # (SEQ_LEN, SEQ_LEN, HEAD, BATCH_SIZE)
     # att = softmax(att ./ sqrt(Float32(m.dim / m.head)), dims=1)         # (SEQ_LEN, SEQ_LEN, HEAD, BATCH_SIZE)
@@ -87,7 +89,7 @@ Flux.@functor CustomAttention
 
     # TODO: add denoising mask here - potential future work
 
-    # println("[$(typeof(att))] $(size(att)) * [$(typeof(v))] $(size(v))")
+    # println("[$(typeof(att)) : $(size(att))] @ [$(typeof(v)) : $(size(v))]")
     att = Transformers.batchedmul(att, v)                               # (SEQ_LEN, DIM/HEAD, HEAD, BATCH_SIZE) = (SEQ_LEN, SEQ_LEN, HEAD, BATCH_SIZE) * (SEQ_LEN, DIM/HEAD, HEAD, BATCH_SIZE)
     att = permutedims(att, (2, 3, 1, 4))                                # (DIM/HEAD, HEAD, SEQ_LEN, BATCH_SIZE)
     att = reshape(att, m.dim, seq_len, :)                               # (DIM, SEQ_LEN, BATCH_SIZE)
@@ -98,6 +100,49 @@ Flux.@functor CustomAttention
     return y
 end
 
+################################################################################
+# custom attention layer (for future experiments)
+struct CustomEmbedding
+    W::AbstractMatrix                                                   # (DIM, VOCAB_SIZE)
+    inner
+    extra::Int
+end
+
+# constructor
+function CustomEmbedding(dim::Int, vocab::Int, inner; extra::Int=1)
+    if dim <= 0 || vocab <= 0
+        error("Dimension and Vocabulary must be positive")
+    end
+    CustomEmbedding(Flux.glorot_uniform(dim, vocab), inner, extra)
+end
+
+Flux.@functor CustomEmbedding
+# Flux.@functor CustomEmbedding (W,)
+
+(m::CustomEmbedding)(x::AbstractArray) = begin
+
+    (dim, vocab) = size(m.W)
+
+    sizes = size(x)
+
+    x = reshape(x, :)                                                   # (SEQ_LEN * BATCH_SIZE)
+
+    W = hcat(m.W, zeros(Float32, dim, m.extra))                         # (DIM, VOCAB_SIZE + extra)
+
+    x = W[:, x]                                                         # (DIM, SEQ_LEN * BATCH_SIZE)
+
+    x = reshape(x, dim, sizes...)                                       # (DIM, SEQ_LEN, BATCH_SIZE)
+
+    y = m.inner(x)                                                      # (DIM, SEQ_LEN, BATCH_SIZE)
+
+    W_ = permutedims(m.W, (2, 1))                                       # (VOCAB_SIZE, DIM)
+
+    y = batched_mul(W_, y)                                              # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE) = (VOCAB_SIZE, DIM) * (DIM, SEQ_LEN, BATCH_SIZE)
+
+    return y
+end
+
+################################################################################
 # build model
 build_model = (n_head::Int, n_layer::Int; dropout=0.1f0) -> begin
 
@@ -114,6 +159,7 @@ build_model = (n_head::Int, n_layer::Int; dropout=0.1f0) -> begin
                 Chain(
                     LayerNorm(DIM),
                     Dense(DIM => DIM * 4, gelu),
+                    Dropout(dropout),
                     Dense(DIM * 4 => DIM),
                     Dropout(dropout),
                 )
@@ -123,14 +169,19 @@ build_model = (n_head::Int, n_layer::Int; dropout=0.1f0) -> begin
 
     # construct model
     model = Chain(
-        Embed(DIM, MOVIE_SIZE + 3),                                     # (SEQ_LEN, BATCH_SIZE) => (DIM, SEQ_LEN, BATCH_SIZE)
-        IdentitySkip(
-            PositionEmbedding(DIM, trainable=false),                    # (DIM, SEQ_LEN, BATCH_SIZE) => (DIM, SEQ_LEN, BATCH_SIZE)
+        # Embed(DIM, MOVIE_SIZE + 1),                                   # (VOCAB_SIZE+1, SEQ_LEN, BATCH_SIZE) => (DIM, SEQ_LEN, BATCH_SIZE)
+        CustomEmbedding(
+            DIM,
+            MOVIE_SIZE,
+            Chain(
+                IdentitySkip(
+                    PositionEmbedding(DIM, trainable=true),             # Position Embedding
+                ),
+                Chain(blocks...),                                       # n_layer Blocks of CustomAttention
+                LayerNorm(DIM)
+            )
         ),
-        # Dropout(dropout),
-        Chain(blocks...),                                               # n_layer Blocks of CustomAttention
-        LayerNorm(DIM),
-        Dense(DIM => MOVIE_SIZE, bias=false),                           # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
+        # Dense(DIM => MOVIE_SIZE, bias=false),                         # (VOCAB_SIZE, SEQ_LEN, BATCH_SIZE)
         softmax,
     )
 
@@ -139,7 +190,7 @@ build_model = (n_head::Int, n_layer::Int; dropout=0.1f0) -> begin
 end
 
 
-# loss function.  x must have already been padded with preceeding NULL_VALUE
+# loss function
 lossF = (model, x, masks) -> begin
 
     masked_x = x .* (1 .- masks) .+ (masks .* MASK_VALUE)
@@ -198,14 +249,6 @@ train = () -> begin
         opt = opt |> gpu
     end
     @info "Optimizer" opt
-
-    function pad(x, target_len::Int)
-        if length(x) < target_len
-            return vcat(fill(NULL_VALUE, target_len - length(x)), x)
-        else
-            return x
-        end
-    end
 
     BATCH_SIZE = args["batch_size"]
     NUM_EPOCHS = args["train_epochs"]

@@ -16,12 +16,12 @@ function parse_commandline()
         "--model_dim"
         help = "model embedding dimension"
         arg_type = Int
-        default = 64
+        default = 128
 
         "--model_nhead"
         help = "model number of heads"
         arg_type = Int
-        default = 2
+        default = 4
 
         "--model_nlayer"
         help = "model number of layers"
@@ -31,7 +31,7 @@ function parse_commandline()
         "--model_dropout"
         help = "model dropout"
         arg_type = Float32
-        default = 0.2f0
+        default = 0.1f0
 
         "--batch_size"
         help = "batch size"
