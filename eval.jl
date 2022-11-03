@@ -1,10 +1,24 @@
 include("./bert4rec.jl")
 
 using Recommendation
+using StatsBase
+
+# calculate movie popularity using only the training data
+function calc_popularity()
+    popularity = zeros(Int, MOVIE_SIZE)
+    for (uid, ratings) in TRAIN_SEQUENCES
+        for row in ratings
+            popularity[row] += 1
+        end
+    end
+    return popularity
+end
 
 eval_model = (model, input_sequences; label="Evaluation") -> begin
 
     PRED_K = 10
+
+    popularity = calc_popularity()
 
     eval_data = get_fix_len_sequence_data(input_sequences)
 
@@ -47,10 +61,24 @@ eval_model = (model, input_sequences; label="Evaluation") -> begin
 
         for i in 1:batch_size
 
-            truth = [batch[end, i]]
+            # get popularity and remove the items in the sequence
+            popularity_copy = copy(popularity)
+            popularity_copy[batch[:, i]] .= 0
 
-            pred = reshape(y[:, end, i], :)                         # (VOCAB_SIZE, batch_size)
+            # create negative samples by popularity and append the last item in sequence
+            samples = sample(1:MOVIE_SIZE, Weights(popularity_copy), 100, replace=false)
+            append!(samples, batch[end, i])
+
+            # initialize predictions
+            pred = zeros(Float32, MOVIE_SIZE)
+            pred_probs = reshape(y[:, end, i], :)                    # (VOCAB_SIZE)
+            pred[samples] .= pred_probs[samples]
+
+            # get top-k predictions
             pred_top_k = Vector(partialsortperm(pred, 1:PRED_K, rev=true))
+
+            # get ground truth
+            truth = [batch[end, i]]
 
             # println("Actual: $(truth)")
             # println("Predicted: $(pred_top_k)")
@@ -76,11 +104,11 @@ eval_model = (model, input_sequences; label="Evaluation") -> begin
         push!(ndcg_10_list, batch_ndcg_10)
 
         next!(progress_tracker, showvalues=[
-            :recall_1 => round(mean(recall_1_list), digits=3),
-            :recall_5 => round(mean(recall_5_list), digits=3),
-            :recall_10 => round(mean(recall_10_list), digits=3),
-            :ndcg_5 => round(mean(ndcg_5_list), digits=3),
-            :ndcg_10 => round(mean(ndcg_10_list), digits=3),
+            :recall_1_avg => round(mean(recall_1_list), digits=3),
+            :recall_5_avg => round(mean(recall_5_list), digits=3),
+            :recall_10_avg => round(mean(recall_10_list), digits=3),
+            :ndcg_5_avg => round(mean(ndcg_5_list), digits=3),
+            :ndcg_10_avg => round(mean(ndcg_10_list), digits=3),
             :recall_1_batch => round(batch_recall_1, digits=3),
             :recall_5_batch => round(batch_recall_5, digits=3),
             :recall_10_batch => round(batch_recall_10, digits=3),

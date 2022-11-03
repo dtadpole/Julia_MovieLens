@@ -55,12 +55,15 @@ end
 if abspath(PROGRAM_FILE) == @__FILE__
 
     # Print the first 5 rows of the users DataFrame
+    load_users()
     @show first(USERS, 5)
 
     # Print the first 5 rows of the movies DataFrame
+    load_movies()
     @show first(MOVIES, 5)
 
     # Print the first 5 rows of the ratings DataFrame
+    load_ratings()
     @show first(RATINGS, 5)
 
 end

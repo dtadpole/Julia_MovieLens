@@ -328,6 +328,7 @@ function save_model(model)
     open(model_filename, "w") do io
         serialize(io, model_)
     end
+    @info "Saved model to [$(model_filename)]"
     return nothing
 end
 
@@ -342,6 +343,7 @@ function load_model()
         if args["model_cuda"] >= 0
             model_ = model_ |> gpu
         end
+        @info "Loaded model from [$(model_filename)]"
         return model_
     end
 end
