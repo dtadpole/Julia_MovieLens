@@ -210,7 +210,6 @@ lossF = (model, x, masks) -> begin
 
     loss_embed = sum(loss_embed, dims=(1, 2))
     loss_embed = reshape(loss_embed, :)                                 # (BATCH_SIZE,)
-    b
     masks_sum = reshape(sum(masks, dims=1), :)                          # (SEQ_LEN, BATCH_SIZE) => (BATCH_SIZE)
 
     # println("masks_sum: $(masks_sum)")
